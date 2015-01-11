@@ -162,6 +162,11 @@
       this.$el.val(selected);
     }
 
+  , clear: function() {
+      this.$el.find("option:selected").attr("selected", false);
+      this.update();
+    }
+
   , render: function() {
       var self = this;
       self.$control.html("");
