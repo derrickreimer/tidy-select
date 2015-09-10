@@ -35,7 +35,7 @@
   }
 
   var escape = function(val) {
-    return val.replace(/(:|\.|\[|\]|,|')/g, "\\$1");
+    return val ? val.replace(/(:|\.|\[|\]|,|')/g, "\\$1") : val;
   }
 
   var Option = function(options) {
