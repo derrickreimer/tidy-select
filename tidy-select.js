@@ -3,9 +3,9 @@
  * http://github.com/djreimer/tidy-select
  * =====================================================================
  * Copyright (c) 2014 Derrick Reimer
- * 
+ *
  * MIT License
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
  * "Software"), to deal in the Software without restriction, including
@@ -13,10 +13,10 @@
  * distribute, sublicense, and/or sell copies of the Software, and to
  * permit persons to whom the Software is furnished to do so, subject to
  * the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be
  * included in all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
  * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -27,6 +27,16 @@
  * ===================================================================== */
 
 ;(function($, window, document, undefined) {
+
+  var closeAll = function() {
+    $("[data-tidy-selected]").each(function() {
+      $(this).data("tidySelect").close();
+    });
+  }
+
+  var escape = function(val) {
+    return val.replace(/(:|\.|\[|\]|,|')/g, "\\$1");
+  }
 
   var Option = function(options) {
     this.options = options || {};
@@ -48,7 +58,18 @@
     }
 
   , title: function() {
-      return this.$el.html();
+      var title = this.$el.html();
+      var labels = this.$el.data("labels");
+
+      if (labels) {
+        label_array = $.map(labels.split(","), function(label, i) {
+          return "<span class='ts-label " + label.toLowerCase() + "'>" + label + "</span>"
+        });
+
+        title = title + " " + label_array.join("");
+      }
+
+      return title;
     }
 
   , description: function() {
@@ -57,7 +78,8 @@
 
   , render: function() {
       var self = this;
-      self.$option = $("<li data-value='" + this.value() + "'></li>");
+      self.$option = $("<li></li>");
+      self.$option.attr("data-value", this.value());
       self.$option.append("<span class='ts-title'>" + this.title() + "</span>");
 
       if (this.description()) {
@@ -77,16 +99,19 @@
     var self = this;
 
     self.$el = $(el);
+    self.$el.attr("data-tidy-selected", "true")
     self.$control = $("<div class='ts-control'></div>");
 
     self.options = options || {};
-    self.defaultText = self.options.defaultText || "Choose an item...";
+    self.defaultText = self.options.defaultText || self.$el.data("default-text") || "Choose an item...";
     self.width = self.options.width || self.$el.data("width") || "auto";
+    self.allowBlank = self.options.allowBlank || (self.$el.data("allow-blank") !== undefined) || false;
 
     self.render();
 
     $("html").on("click", function() {
-      self.$control.removeClass("open");
+      // self.$control.removeClass("open");
+      closeAll();
     });
 
     $("body").on("click", ".ts-control .ts-popover", function(e) {
@@ -109,28 +134,34 @@
   Control.prototype = {
     constructor: Control
 
+  , isDisabled: function() {
+      return this.$control.hasClass("disabled");
+    }
+
   , close: function() {
       this.$control.removeClass("open");
     }
 
   , open: function() {
-      $(".ts-control").removeClass("open");
+      closeAll();
       this.$control.addClass("open");
     }
 
   , toggle: function() {
-      this.$control.hasClass("open") ? this.close() : this.open();
+      if (!this.isDisabled()) {
+        this.$control.hasClass("open") ? this.close() : this.open();
+      }
     }
 
   , update: function() {
-      var $option = this.$el.find("option:selected");
-      var text = $option.text();
-      var value = $option.val();
+      var value = this.$el.find("option:selected").val();
+      var $option = this.$options.find("li[data-value='" + escape(value) + "']");
+      var text = $option.find(".ts-title").html();
       if (!text || text == "") text = this.defaultText;
 
-      this.$dropdown.html(text);
       this.$options.find("li").removeClass("selected");
-      this.$options.find("li[data-value='" + value + "']").addClass("selected");
+      $option.addClass("selected");
+      this.$dropdown.find(".ts-current-value").html(text);
     }
 
   , reset: function(options) {
@@ -146,7 +177,7 @@
         if (option.value) {
           $optionEl.val(option.value);
         }
-        
+
         if (option.title) {
           $optionEl.html(option.title);
         }
@@ -160,6 +191,26 @@
 
       this.render();
       this.$el.val(selected);
+      this.update();
+    }
+
+  , append: function(options) {
+      var $optionEl = $("<option></option>");
+
+      if (options.value) {
+        $optionEl.val(options.value);
+      }
+
+      if (options.title) {
+        $optionEl.html(options.title);
+      }
+
+      if (options.description) {
+        $optionEl.data("description", options.description);
+      }
+
+      this.$el.append($optionEl);
+      this.render();
     }
 
   , render: function() {
@@ -167,16 +218,24 @@
       self.$control.html("");
 
       // Inherit class list from the original "select"
-      self.$control.attr("class", "ts-control " + self.$el.attr("class"));
+      var originalClasses = self.$el.attr("class");
 
-      self.$dropdown = $("<a href='#' class='ts-dropdown'></a>");
+      if (originalClasses) {
+        self.$control.attr("class", "ts-control " + originalClasses);
+      }
+
+      if (self.$el.is(":disabled")) {
+        self.$control.addClass("disabled");
+      }
+
+      self.$dropdown = $("<a href='#' class='ts-dropdown'><span class='ts-current-value'></span></a>");
       self.$popover = $("<div class='ts-popover'></div>");
       self.$options = $("<ul class='ts-options'></ul>");
 
       self.$el.find("option").each(function() {
         var $option = $(this);
 
-        if ($option.val() !== "") {
+        if (self.allowBlank || $option.val() !== "") {
           var option = new Option({
             $el: $option,
             control: self
@@ -202,7 +261,7 @@
       self.update();
     }
   }
-  
+
   $.fn.tidySelect = function(options) {
     var args = Array.prototype.slice.call(arguments);
 
