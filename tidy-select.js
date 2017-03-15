@@ -144,6 +144,7 @@
 
   , open: function() {
       closeAll();
+      this.$popover.width(this.$control.width() - 2); // re-adjust the popover width
       this.$control.addClass("open");
     }
 
